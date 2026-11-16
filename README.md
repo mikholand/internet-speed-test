@@ -5,6 +5,9 @@ URL several times (10 by default), strictly one request after another, measures
 how long each download takes and how many bytes actually arrive, and prints the
 resulting speed.
 
+The decisions taken on ambiguous points of the task are listed in
+[How the task was interpreted](#how-the-task-was-interpreted).
+
 ## Features
 
 - Exactly **10 sequential requests** by default; each one starts only after the
@@ -137,6 +140,25 @@ Download speed:   9.22 MB/s (73.77 Mbps)
 The first request is usually the slowest: it includes the DNS lookup and the
 TCP and TLS handshakes. The following requests reuse the same connection.
 
+## How the task was interpreted
+
+The task statement is short, so several points allow more than one reading.
+These are the decisions taken and the reason for each.
+
+| Point | Decision | Reason |
+|---|---|---|
+| Speed unit ("мб/с" in the task) | Megabytes per second, decimal (1 MB = 10⁶ bytes), printed first; the same value in Mbps in brackets | "мб/с" most commonly means megabytes per second; Mbps is added because internet plans are sold in it |
+| "Wait for the response" | A request ends when the last byte of the body has arrived, not when the headers arrive | The speed has to cover the actual data transfer |
+| "10 sequential requests" | Exactly 10 by default, each started only after the previous body is fully read; no extra warm-up request. `--count` exists, but the default stays 10 | A warm-up request would mean 11 requests to the server |
+| Downloaded volume | Body bytes actually received; HTTP headers are not counted and `Content-Length` is not used | The header can be missing or wrong; the body is the data the user asked for |
+| Speed formula | Total bytes / total time of the requests; pauses between requests are excluded | The average of per-request speeds overstates the result (see [Units and formulas](#units-and-formulas)) |
+| Connection setup (not in the task) | Counted: the first request includes DNS, TCP and TLS; the others reuse the connection | It is part of a real request, and reusing the connection is what a normal HTTP client does |
+| Redirects (not in the task) | Followed; their time is part of the request | Image URLs often redirect to a CDN |
+| Timeout (not in the task) | 30 seconds without network activity, not a cap on the total download time | A slow but working link is a result to report, not a failure |
+| Failed request (not in the task) | The run stops, no summary is printed, exit code 1 | A speed based on fewer downloads than requested, or with zeros filled in, would be misleading |
+| Empty response (not in the task) | Treated as a failure | There is nothing to measure |
+| Language (not in the task) | Python 3.10+ | The task does not name a language |
+
 ## How the measurement works
 
 1. A single `httpx.Client` is created for the whole run. Its connection pool
@@ -254,8 +276,9 @@ The tests don't need internet access. HTTP is replaced by
 - HTTP errors, empty body, connection errors and timeouts;
 - the speed formula (total bytes / total time) and unit formatting;
 - CLI validation and exit codes;
-- connection reuse (all 10 requests over one keep-alive connection) and a real
-  read timeout over sockets.
+- over real sockets: connection reuse (all 10 requests over one keep-alive
+  connection), a read timeout, and a body cut off mid-download, which must stop
+  the run with exit code 1 and must not be retried.
 
 ## Project structure
 
