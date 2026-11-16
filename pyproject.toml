@@ -1,0 +1,25 @@
+# Settings for the development tools only: the project is a single script,
+# not an installable package. Dependencies are in requirements*.txt.
+
+[tool.pytest.ini_options]
+testpaths = ["test_main.py"]
+
+[tool.coverage.run]
+source = ["main"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 100
+exclude_also = ['if __name__ == "__main__":']
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "RUF", "PL", "C4", "PT"]
+ignore = ["PLR2004"]  # magic numbers are fine in tests and formatting
+
+[tool.mypy]
+strict = true
+files = ["main.py", "test_main.py"]

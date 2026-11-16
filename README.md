@@ -263,27 +263,44 @@ which is exactly what a speed test should report, into a failure.
 Redirects are followed automatically (up to 20 per request). The time spent on
 redirects is part of the request time.
 
-## Running the tests
+## Development and tests
+
+Install the development tools (pytest, pytest-cov, ruff, mypy) into the
+virtual environment:
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest
 ```
 
-The tests don't need internet access. HTTP is replaced by
-`httpx.MockTransport`, and two end-to-end tests use a temporary HTTP server on
-`127.0.0.1`. They cover:
+Run the checks the project is kept clean with:
+
+```bash
+python -m pytest --cov    # tests with line and branch coverage; fails below 100%
+ruff check .              # linting
+ruff format --check .     # formatting
+mypy                      # strict type checking
+```
+
+Tool settings are in `pyproject.toml`. That file holds only tool
+configuration: the project is a single script, not an installable package.
+
+The tests need no internet access. Most of them replace HTTP with
+`httpx.MockTransport`; the end-to-end tests use a temporary HTTP server on
+`127.0.0.1`, and some run `main.py` as a separate process. They cover:
 
 - byte counting (streamed body without `Content-Length`, misleading `Content-Length`);
 - strictly sequential execution: each response is fully read before the next
   request starts;
 - stopping at the first failure, with the request number in the message;
-- HTTP errors, empty body, connection errors and timeouts;
+- HTTP errors (including a status without a reason phrase), empty body,
+  connection errors and timeouts;
 - the speed formula (total bytes / total time) and unit formatting;
-- CLI validation and exit codes;
+- CLI validation, Ctrl+C, a closed output pipe, and the exit codes of the real
+  process;
 - over real sockets: connection reuse (all 10 requests over one keep-alive
-  connection), a read timeout, and a body cut off mid-download, which must stop
-  the run with exit code 1 and must not be retried.
+  connection), a timeout before the headers and in the middle of the body, a
+  followed redirect, and a body cut off mid-download, which must stop the run
+  with exit code 1 and must not be retried.
 
 ## Project structure
 
@@ -292,7 +309,8 @@ internet-speed-test/
 ├── main.py               # the whole tool: CLI, measurement, calculations, report
 ├── test_main.py          # pytest tests (no internet needed)
 ├── requirements.txt      # runtime dependency: httpx
-├── requirements-dev.txt  # runtime + pytest, for running tests
+├── requirements-dev.txt  # runtime + pytest, pytest-cov, ruff, mypy
+├── pyproject.toml        # settings for the development tools only
 ├── README.md
 └── .gitignore
 ```
@@ -313,7 +331,7 @@ better:
   mocking libraries;
 - the code is fully type-annotated.
 
-**Why a single file.** The tool is about 300 lines with one job. The code is
+**Why a single file.** The tool is about 330 lines with one job. The code is
 already split into small functions with one responsibility each (parse
 arguments → measure a request → run the series → summarize → format), so
 separate modules would only add imports. Those functions can be moved into

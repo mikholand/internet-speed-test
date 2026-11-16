@@ -12,6 +12,10 @@ env/
 .mypy_cache/
 .ruff_cache/
 
+# Test coverage
+.coverage
+htmlcov/
+
 # IDE and local tool settings
 .idea/
 .vscode/
