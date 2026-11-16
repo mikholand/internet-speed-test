@@ -8,6 +8,22 @@ resulting speed.
 The decisions taken on ambiguous points of the task are listed in
 [How the task was interpreted](#how-the-task-was-interpreted).
 
+## Quick start
+
+```bash
+git clone https://github.com/mikholand/internet-speed-test.git
+cd internet-speed-test
+python -m venv .venv
+source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python main.py "https://speed.cloudflare.com/__down?bytes=5000000"
+```
+
+The last line of the report shows the result, for example
+`Download speed:   9.22 MB/s (73.77 Mbps)`. On macOS and Linux use `python3`
+if `python` is not found. Details for each system are in
+[Installation](#installation) and [Usage](#usage).
+
 ## Features
 
 - Exactly **10 sequential requests** by default; each one starts only after the
