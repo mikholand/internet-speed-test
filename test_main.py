@@ -158,6 +158,25 @@ def test_run_speed_test_reports_network_errors(
     assert expected_reason in str(error_info.value)
 
 
+def test_run_speed_test_reports_empty_body_with_request_number() -> None:
+    with (
+        make_client(lambda request: streamed_response(b"")) as client,
+        pytest.raises(
+            main.SpeedTestError,
+            match="Request 1/3 failed: the server returned an empty response body",
+        ),
+    ):
+        main.run_speed_test(client, URL, count=3)
+
+
+def test_status_without_reason_phrase_is_reported_by_code() -> None:
+    with (
+        make_client(lambda request: httpx.Response(599)) as client,
+        pytest.raises(main.SpeedTestError, match=r"responded with HTTP 599$"),
+    ):
+        main.run_speed_test(client, URL, count=1)
+
+
 # --- Calculations and formatting --------------------------------------------
 
 
@@ -257,6 +276,7 @@ def test_parse_args_rejects_invalid_url(
         ["--count", "0"],
         ["--count", "-1"],
         ["--count", "ten"],
+        ["--timeout", "abc"],
         ["--timeout", "0"],
         ["--timeout", "-5"],
         ["--timeout", "nan"],
@@ -310,6 +330,20 @@ def test_main_reports_error_and_returns_non_zero(
         "Request 1/10 failed: server responded with HTTP 404 Not Found" in captured.err
     )
     assert "RESULTS" not in captured.out
+
+
+def test_main_reports_interruption_and_returns_130(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def press_ctrl_c(request: httpx.Request) -> httpx.Response:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        main, "create_client", lambda timeout: make_client(press_ctrl_c)
+    )
+
+    assert main.main([URL]) == main.EXIT_INTERRUPTED
+    assert "Interrupted by user." in capsys.readouterr().err
 
 
 # --- End to end over real sockets -------------------------------------------
@@ -481,3 +515,44 @@ def test_closed_stdout_ends_the_real_program_without_a_traceback() -> None:
 
     assert process.wait(timeout=30) == main.EXIT_FAILURE
     assert b"Traceback" not in stderr
+
+
+def run_script(*arguments: str) -> subprocess.CompletedProcess[str]:
+    """Run main.py as a separate process, as a user would."""
+    return subprocess.run(
+        [sys.executable, str(MAIN_SCRIPT), *arguments],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("arguments", "exit_code"),
+    [
+        (["--help"], 0),
+        (["example.com/image.jpg"], 2),
+        ([URL, "--count", "0"], 2),
+    ],
+)
+def test_script_exit_codes_for_help_and_bad_arguments(
+    arguments: list[str], exit_code: int
+) -> None:
+    assert run_script(*arguments).returncode == exit_code
+
+
+def test_script_succeeds_end_to_end(local_server: RecordingServer) -> None:
+    completed = run_script(local_url(local_server, "/file.bin"))
+
+    assert completed.returncode == main.EXIT_SUCCESS
+    assert "Total downloaded: 2.56 MB (2,560,000 bytes)" in completed.stdout
+
+
+def test_script_fails_end_to_end_with_exit_code_1(
+    local_server: RecordingServer,
+) -> None:
+    completed = run_script(local_url(local_server, "/drop-second"))
+
+    assert completed.returncode == main.EXIT_FAILURE
+    assert "Request 2/10 failed" in completed.stderr
