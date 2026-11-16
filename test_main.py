@@ -6,6 +6,7 @@ use a throwaway HTTP server on 127.0.0.1, so no internet access is required.
 
 import errno
 import http.server
+import os
 import subprocess
 import sys
 import threading
@@ -479,13 +480,14 @@ def test_run_returns_the_exit_code_of_main(monkeypatch: pytest.MonkeyPatch) -> N
 
 @pytest.mark.parametrize("error_number", [errno.EPIPE, errno.EINVAL])
 def test_run_exits_quietly_when_output_is_closed(
-    error_number: int, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    error_number: int, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def write_to_closed_pipe() -> int:
         raise OSError(error_number, "the reader closed the pipe")
 
     monkeypatch.setattr(main, "main", write_to_closed_pipe)
-    with (tmp_path / "stdout.txt").open("w") as stdout:
+    # run() redirects the file descriptor behind stdout, so it needs a real one.
+    with open(os.devnull, "w") as stdout:
         monkeypatch.setattr(sys, "stdout", stdout)
 
         assert main.run() == main.EXIT_FAILURE
