@@ -242,9 +242,14 @@ code.
 | Empty body (e.g. HTTP 204) | `Error: Request 1/10 failed: the server returned an empty response body` | 1 |
 | Connection dropped mid-download, too many redirects, other protocol errors | `Error: Request 1/10 failed: network error (peer closed connection without sending complete message body (received 400000 bytes, expected 1000000))` | 1 |
 | Interrupted with Ctrl+C | `Interrupted by user.` | 130 |
+| Output closed early, e.g. piped to `head` | Stops quietly, no traceback | 1 |
 
 Invalid arguments are rejected before any network request is made. Exit code 2
 is the standard `argparse` code for usage errors.
+
+Anything not in this table would be a bug in the tool. Such errors are
+deliberately not caught, so their traceback stays visible (Python exits with
+code 1).
 
 ### Timeout
 

@@ -4,10 +4,14 @@ Most tests replace the network with httpx.MockTransport; the end-to-end tests
 use a throwaway HTTP server on 127.0.0.1, so no internet access is required.
 """
 
+import errno
 import http.server
+import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
+from pathlib import Path
 
 import httpx
 import pytest
@@ -15,6 +19,7 @@ import pytest
 import main
 
 URL = "https://example.com/image.jpg"
+MAIN_SCRIPT = Path(main.__file__)
 
 Handler = Callable[[httpx.Request], httpx.Response]
 
@@ -427,3 +432,52 @@ def test_end_to_end_truncated_body_fails_without_retry(
     assert "Request 2/10 failed: network error" in captured.err
     assert "received 128000 bytes, expected 256000" in captured.err
     assert "RESULTS" not in captured.out
+
+
+# --- Program entry point ----------------------------------------------------
+
+
+def test_run_returns_the_exit_code_of_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main, "main", lambda: main.EXIT_SUCCESS)
+
+    assert main.run() == main.EXIT_SUCCESS
+
+
+@pytest.mark.parametrize("error_number", [errno.EPIPE, errno.EINVAL])
+def test_run_exits_quietly_when_output_is_closed(
+    error_number: int, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def write_to_closed_pipe() -> int:
+        raise OSError(error_number, "the reader closed the pipe")
+
+    monkeypatch.setattr(main, "main", write_to_closed_pipe)
+    with (tmp_path / "stdout.txt").open("w") as stdout:
+        monkeypatch.setattr(sys, "stdout", stdout)
+
+        assert main.run() == main.EXIT_FAILURE
+
+
+def test_run_does_not_hide_other_os_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail() -> int:
+        raise PermissionError(errno.EACCES, "permission denied")
+
+    monkeypatch.setattr(main, "main", fail)
+
+    with pytest.raises(PermissionError):
+        main.run()
+
+
+def test_closed_stdout_ends_the_real_program_without_a_traceback() -> None:
+    process = subprocess.Popen(
+        [sys.executable, str(MAIN_SCRIPT), URL],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert process.stdout is not None
+    assert process.stderr is not None
+    process.stdout.close()  # nobody reads the output, so the first print fails
+
+    stderr = process.stderr.read()
+
+    assert process.wait(timeout=30) == main.EXIT_FAILURE
+    assert b"Traceback" not in stderr

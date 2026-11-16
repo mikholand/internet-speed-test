@@ -5,7 +5,9 @@ Usage:
 """
 
 import argparse
+import errno
 import math
+import os
 import sys
 import time
 from collections.abc import Sequence
@@ -28,6 +30,9 @@ MAX_PORT = 65_535
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 EXIT_INTERRUPTED = 130
+# Writing to a pipe whose reader has gone away (e.g. `| head`) fails with
+# EPIPE; Windows reports the same situation as EINVAL.
+CLOSED_OUTPUT_ERRNOS = frozenset({errno.EPIPE, errno.EINVAL})
 
 REPORT_WIDTH = 56
 USER_AGENT = "internet-speed-test/1.0"
@@ -309,5 +314,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     return EXIT_SUCCESS
 
 
+def run() -> int:
+    """Program entry point: main() plus a quiet exit when stdout is closed early."""
+    try:
+        exit_code = main()
+        sys.stdout.flush()
+    except OSError as error:
+        if error.errno not in CLOSED_OUTPUT_ERRNOS:
+            raise
+        # Nobody reads the output any more. Point stdout at devnull so the
+        # interpreter's final flush cannot fail and print a traceback.
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        return EXIT_FAILURE
+    return exit_code
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())
