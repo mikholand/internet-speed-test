@@ -316,6 +316,7 @@ class RecordingServer(http.server.ThreadingHTTPServer):
     def __init__(self) -> None:
         super().__init__(("127.0.0.1", 0), RecordingHandler)
         self.client_ports: list[int] = []
+        self.paths: list[str] = []
 
 
 class RecordingHandler(http.server.BaseHTTPRequestHandler):
@@ -324,18 +325,34 @@ class RecordingHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         assert isinstance(self.server, RecordingServer)
         self.server.client_ports.append(self.client_address[1])
+        self.server.paths.append(self.path)
+        if self.path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", "/file.bin")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path == "/slow":
             time.sleep(1)
         body = b"x" * LOCAL_BODY_SIZE
+        half = len(body) // 2
         # The 2nd request to /drop-second gets half the promised body, then a hang-up.
         truncated = self.path == "/drop-second" and len(self.server.client_ports) == 2
         try:
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body[: len(body) // 2] if truncated else body)
+            if truncated:
+                self.wfile.write(body[:half])
+            elif self.path == "/stall-body":
+                self.wfile.write(body[:half])
+                self.wfile.flush()
+                time.sleep(1)  # goes silent in the middle of the body
+                self.wfile.write(body[half:])
+            else:
+                self.wfile.write(body)
         except ConnectionError:
-            pass  # the client gave up (timeout test)
+            pass  # the client gave up (timeout tests)
         if truncated:
             self.close_connection = True
 
@@ -375,6 +392,28 @@ def test_end_to_end_timeout_fails_with_non_zero_exit(
 
     assert exit_code == 1
     assert "timed out while waiting for data" in capsys.readouterr().err
+
+
+def test_end_to_end_timeout_in_the_middle_of_the_body(
+    local_server: RecordingServer, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main.main([local_url(local_server, "/stall-body"), "--timeout", "0.2"])
+
+    assert exit_code == 1
+    assert (
+        "Request 1/10 failed: timed out while waiting for data"
+        in capsys.readouterr().err
+    )
+
+
+def test_end_to_end_follows_redirects_and_counts_only_the_final_body(
+    local_server: RecordingServer, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main.main([local_url(local_server, "/redirect"), "--count", "3"])
+
+    assert exit_code == 0
+    assert local_server.paths == ["/redirect", "/file.bin"] * 3
+    assert "Total downloaded: 768.00 KB (768,000 bytes)" in capsys.readouterr().out
 
 
 def test_end_to_end_truncated_body_fails_without_retry(
