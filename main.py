@@ -19,6 +19,9 @@ DEFAULT_TIMEOUT_SECONDS = 30.0
 BITS_PER_BYTE = 8
 # Decimal (SI) prefixes for both bytes and bits: 1 MB = 10**6 bytes = 8 Mbit.
 DECIMAL_PREFIXES = (("G", 1_000_000_000), ("M", 1_000_000), ("K", 1_000))
+# Rates stay in mega-units (MB/s, Mbps) unless they would round to 0.00.
+MEGA = 1_000_000
+MIN_MEGA_RATE = 10_000
 
 MAX_PORT = 65_535
 
@@ -233,6 +236,17 @@ def format_decimal(value: float, unit: str) -> str:
     return f"{value:.0f} {unit}"
 
 
+def format_rate(value: float, unit: str) -> str:
+    """Format a per-second rate in mega-units, e.g. 9_620_000 B/s -> '9.62 MB/s'.
+
+    A rate too small to show in mega-units (it would print as 0.00) gets a
+    smaller prefix instead, e.g. '2.12 KB/s'.
+    """
+    if value >= MIN_MEGA_RATE:
+        return f"{value / MEGA:.2f} M{unit}"
+    return format_decimal(value, unit)
+
+
 def format_header(url: str, count: int, timeout: float) -> str:
     return "\n".join(
         [
@@ -254,7 +268,7 @@ def format_measurement(number: int, count: int, measurement: RequestMeasurement)
         f"Request {number:>{number_width}}/{count}: "
         f"{measurement.elapsed_seconds:7.3f} sec | "
         f"{format_decimal(measurement.downloaded_bytes, 'B'):>9} | "
-        f"{format_decimal(measurement.bits_per_second, 'bps'):>11}"
+        f"{format_rate(measurement.bits_per_second / BITS_PER_BYTE, 'B/s'):>10}"
     )
 
 
@@ -271,8 +285,8 @@ def format_summary(summary: SpeedTestSummary) -> str:
             f"({summary.total_bytes:,} bytes)",
             f"Total time:       {summary.total_seconds:.3f} sec",
             f"Average time:     {summary.average_seconds:.3f} sec",
-            f"Download speed:   {format_decimal(summary.bits_per_second, 'bps')} "
-            f"({format_decimal(bytes_per_second, 'B/s')})",
+            f"Download speed:   {format_rate(bytes_per_second, 'B/s')} "
+            f"({format_rate(summary.bits_per_second, 'bps')})",
             "",
             "=" * REPORT_WIDTH,
         ]

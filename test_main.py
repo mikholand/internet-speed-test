@@ -184,16 +184,37 @@ def test_summarize_requires_measurements() -> None:
         (1_000, "B", "1.00 KB"),
         (1_240_000, "B", "1.24 MB"),
         (2_500_000_000, "B", "2.50 GB"),
-        (835.4, "bps", "835 bps"),
-        (1_668.3, "bps", "1.67 Kbps"),  # a slow transfer is never shown as 0.00
-        (75_440_000, "bps", "75.44 Mbps"),
-        (1_250_000_000, "bps", "1.25 Gbps"),
     ],
 )
 def test_format_decimal_uses_si_prefixes(
     value: float, unit: str, expected: str
 ) -> None:
     assert main.format_decimal(value, unit) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "unit", "expected"),
+    [
+        (9_620_000, "B/s", "9.62 MB/s"),
+        (500_000, "B/s", "0.50 MB/s"),  # a slow link still reads in MB/s
+        (10_000, "B/s", "0.01 MB/s"),
+        (2_120, "B/s", "2.12 KB/s"),  # would otherwise print as 0.00 MB/s
+        (212, "B/s", "212 B/s"),
+        (76_950_000, "bps", "76.95 Mbps"),
+        (1_250_000_000, "bps", "1250.00 Mbps"),
+        (1_668.3, "bps", "1.67 Kbps"),
+    ],
+)
+def test_format_rate_prefers_mega_units(value: float, unit: str, expected: str) -> None:
+    assert main.format_rate(value, unit) == expected
+
+
+def test_summary_reports_megabytes_per_second_first() -> None:
+    summary = main.SpeedTestSummary(
+        request_count=10, total_bytes=50_000_000, total_seconds=5.198
+    )
+
+    assert "Download speed:   9.62 MB/s (76.95 Mbps)" in main.format_summary(summary)
 
 
 # --- Command line -----------------------------------------------------------

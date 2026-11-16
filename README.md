@@ -14,7 +14,8 @@ resulting speed.
 - Volume is counted from the **bytes actually received**, not from the
   `Content-Length` header.
 - Per-request time, size and speed, then a summary: total volume, total time,
-  average time per request and the overall download speed.
+  average time per request and the overall download speed in MB/s (with Mbps
+  alongside).
 - One HTTP client for the whole run: the connection is kept alive and reused.
 - Clear error messages and non-zero exit codes for invalid URLs, connection
   errors, timeouts, HTTP 4xx/5xx and empty responses.
@@ -110,25 +111,25 @@ URL:      https://speed.cloudflare.com/__down?bytes=5000000
 Requests: 10
 Timeout:  30 sec
 
-Request  1/10:   0.710 sec |   5.00 MB |  56.34 Mbps
-Request  2/10:   0.479 sec |   5.00 MB |  83.57 Mbps
-Request  3/10:   0.492 sec |   5.00 MB |  81.23 Mbps
-Request  4/10:   0.527 sec |   5.00 MB |  75.87 Mbps
-Request  5/10:   0.479 sec |   5.00 MB |  83.54 Mbps
-Request  6/10:   0.496 sec |   5.00 MB |  80.66 Mbps
-Request  7/10:   0.506 sec |   5.00 MB |  79.09 Mbps
-Request  8/10:   0.529 sec |   5.00 MB |  75.66 Mbps
-Request  9/10:   0.486 sec |   5.00 MB |  82.34 Mbps
-Request 10/10:   0.495 sec |   5.00 MB |  80.78 Mbps
+Request  1/10:   0.726 sec |   5.00 MB |  6.89 MB/s
+Request  2/10:   0.545 sec |   5.00 MB |  9.17 MB/s
+Request  3/10:   0.509 sec |   5.00 MB |  9.82 MB/s
+Request  4/10:   0.506 sec |   5.00 MB |  9.87 MB/s
+Request  5/10:   0.509 sec |   5.00 MB |  9.82 MB/s
+Request  6/10:   0.514 sec |   5.00 MB |  9.72 MB/s
+Request  7/10:   0.547 sec |   5.00 MB |  9.14 MB/s
+Request  8/10:   0.499 sec |   5.00 MB | 10.02 MB/s
+Request  9/10:   0.540 sec |   5.00 MB |  9.25 MB/s
+Request 10/10:   0.526 sec |   5.00 MB |  9.51 MB/s
 
 --------------------------------------------------------
 RESULTS
 --------------------------------------------------------
 
 Total downloaded: 50.00 MB (50,000,000 bytes)
-Total time:       5.198 sec
-Average time:     0.520 sec
-Download speed:   76.95 Mbps (9.62 MB/s)
+Total time:       5.422 sec
+Average time:     0.542 sec
+Download speed:   9.22 MB/s (73.77 Mbps)
 
 ========================================================
 ```
@@ -172,11 +173,12 @@ services use:
 | 1 Kbps / 1 Mbps / 1 Gbps | 10³ / 10⁶ / 10⁹ bits per second |
 | 1 MB/s | 8 Mbps |
 
-The main unit is **megabits per second (Mbps)**, because internet plans are
-sold in Mbps, so the result can be compared with your plan directly. The
-equivalent in megabytes per second (MB/s) is shown in brackets, which is
-easier to relate to file sizes. The prefix adapts to the value (for example,
-a very slow transfer shows as `1.69 Kbps` instead of a misleading `0.00 Mbps`).
+The main unit is **megabytes per second (MB/s)**: the task asks for the speed
+in "мб/с", and MB/s relates directly to file sizes. The same value in
+**megabits per second (Mbps)** is shown in brackets, because internet plans are
+sold in Mbps. Both stay in mega-units even on a slow link (`0.50 MB/s`). Only a
+rate that would round to `0.00` gets a smaller prefix, for example `2.12 KB/s`
+instead of a misleading `0.00 MB/s`.
 
 > File managers such as Windows Explorer show sizes in binary units
 > (1 MiB = 1,048,576 bytes) but label them "MB". The same 5,000,000-byte file
@@ -188,17 +190,17 @@ For `N` requests, where request `i` took `tᵢ` seconds and delivered `bᵢ` byt
 Total downloaded  B = b₁ + b₂ + … + bₙ                      (bytes)
 Total time        T = t₁ + t₂ + … + tₙ                      (seconds)
 Average time        = T / N                                 (seconds)
-Download speed      = B × 8 / T / 1 000 000                 (Mbps)
-                    = B / T / 1 000 000                     (MB/s)
+Download speed      = B / T / 1 000 000                     (MB/s)
+                    = B × 8 / T / 1 000 000                 (Mbps)
 ```
 
-Per-request speed in each line is `bᵢ × 8 / tᵢ`.
+Per-request speed in each line is `bᵢ / tᵢ`, shown in MB/s.
 
 The overall speed is **total bytes divided by total time**, not the average of
 the per-request speeds. For example, 1 MB in 1 s plus 1 MB in 3 s is
-16 Mbit / 4 s = **4 Mbps**. Averaging the two speeds (8 and 2.67 Mbps) would
-give 5.33 Mbps, which overstates the speed because it gives the fast request
-as much weight as the slow one.
+2 MB / 4 s = **0.50 MB/s**. Averaging the two speeds (1.00 and 0.33 MB/s) would
+give 0.67 MB/s, which overstates the speed because it gives the fast request as
+much weight as the slow one.
 
 ## Error handling
 
