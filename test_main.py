@@ -306,13 +306,17 @@ class RecordingHandler(http.server.BaseHTTPRequestHandler):
         if self.path == "/slow":
             time.sleep(1)
         body = b"x" * LOCAL_BODY_SIZE
+        # The 2nd request to /drop-second gets half the promised body, then a hang-up.
+        truncated = self.path == "/drop-second" and len(self.server.client_ports) == 2
         try:
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            self.wfile.write(body[: len(body) // 2] if truncated else body)
         except ConnectionError:
             pass  # the client gave up (timeout test)
+        if truncated:
+            self.close_connection = True
 
     def log_message(self, format: str, *args: object) -> None:
         pass
@@ -350,3 +354,16 @@ def test_end_to_end_timeout_fails_with_non_zero_exit(
 
     assert exit_code == 1
     assert "timed out while waiting for data" in capsys.readouterr().err
+
+
+def test_end_to_end_truncated_body_fails_without_retry(
+    local_server: RecordingServer, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main.main([local_url(local_server, "/drop-second")])
+
+    assert exit_code == 1
+    assert len(local_server.client_ports) == 2  # stopped at the failure, no retry
+    captured = capsys.readouterr()
+    assert "Request 2/10 failed: network error" in captured.err
+    assert "received 128000 bytes, expected 256000" in captured.err
+    assert "RESULTS" not in captured.out
