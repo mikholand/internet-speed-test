@@ -1,5 +1,7 @@
 # Internet Download Speed Test
 
+**English** | [Русский](README.ru.md)
+
 A small command-line tool that measures download speed: it downloads the same
 URL several times (10 by default), strictly one request after another, measures
 how long each download takes and how many bytes actually arrive, and prints the
@@ -327,7 +329,8 @@ internet-speed-test/
 ├── requirements.txt      # runtime dependency: httpx
 ├── requirements-dev.txt  # runtime + pytest, pytest-cov, ruff, mypy
 ├── pyproject.toml        # settings for the development tools only
-├── README.md
+├── README.md             # this description, in English
+├── README.ru.md          # the same description in Russian
 └── .gitignore
 ```
 
